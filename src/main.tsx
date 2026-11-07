@@ -4,6 +4,7 @@ import App from './App';
 import { registerServiceWorker } from './lib/pwa';
 import { registerInstallPromptListener } from './lib/platform';
 import './styles/app.css';
+import './styles/player.css';
 
 registerInstallPromptListener();
 registerServiceWorker();
