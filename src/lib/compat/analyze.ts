@@ -1,5 +1,6 @@
 import { getEngine } from '../engines/registry';
 import type { EngineId } from '../engines/types';
+import { COMPAT_RUNTIME, hasCompatRuntime } from '../player/profile';
 import { FEATURE_SIGNALS, NATIVE_BINARY_RE } from './features';
 
 /**
@@ -10,7 +11,7 @@ import { FEATURE_SIGNALS, NATIVE_BINARY_RE } from './features';
  * what a runtime would have to support.
  *
  * What it must never do: invent a compatibility level or a percentage. Levels
- * 1-4 are only assigned by the Compatibility Lab after running the mod.
+ * 1–4 are only assigned by the Compatibility Lab after running the mod.
  */
 
 export interface FeatureFinding {
@@ -72,7 +73,13 @@ export function analyzeMod(input: AnalysisInput): CompatibilityReport {
     );
   } else if (engine.import === 'none') {
     blockers.push(`${engine.name} is not supported for import yet.`);
-  } else if (engine.playback !== 'full' && engine.playback !== 'near-full' && engine.playback !== 'partial' && engine.playback !== 'experimental') {
+  } else if (
+    !hasCompatRuntime(engine.id) &&
+    engine.playback !== 'full' &&
+    engine.playback !== 'near-full' &&
+    engine.playback !== 'partial' &&
+    engine.playback !== 'experimental'
+  ) {
     blockers.push(`No browser runtime exists for ${engine.name} yet, so this mod cannot be launched.`);
   }
 
@@ -89,6 +96,20 @@ export function analyzeMod(input: AnalysisInput): CompatibilityReport {
   const video = findings.find((f) => f.id === 'video');
   if (video?.detected && input.engine === 'psych') {
     warnings.push('Video cutscenes are expected to fail: hxvlc playback is not available in browsers.');
+  }
+
+  if (hasCompatRuntime(input.engine)) {
+    const scripts = findings.filter(
+      (finding) => (finding.id === 'lua' || finding.id === 'hscript') && finding.detected,
+    );
+    if (scripts.length > 0) {
+      warnings.push(
+        `${COMPAT_RUNTIME.name} does not execute ${scripts.map((script) => script.label).join(' or ')}; mod logic that depends on them will not run.`,
+      );
+    }
+    if (findings.some((finding) => finding.id === 'characters' && finding.detected)) {
+      warnings.push(`${COMPAT_RUNTIME.name} does not draw custom characters or stages yet.`);
+    }
   }
 
   const unsupported: FeatureFinding[] = [];
@@ -108,7 +129,9 @@ export function analyzeMod(input: AnalysisInput): CompatibilityReport {
     engineVersion: input.engineVersion,
     level: null,
     levelReason: engine
-      ? `No compatibility level is assigned. Levels 1-4 require a runtime test run and no ${engine.shortName} browser runtime has been published.`
+      ? hasCompatRuntime(engine.id)
+        ? `No compatibility level is assigned. Levels 1–4 only come from a completed test run against this exact mod; the ${COMPAT_RUNTIME.name} is not yet verified against community mods.`
+        : `No compatibility level is assigned. Levels 1–4 require a runtime test run and no ${engine.shortName} browser runtime has been published.`
       : 'No compatibility level is assigned because the engine is unknown.',
     verified: false,
     findings,

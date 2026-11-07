@@ -9,6 +9,7 @@ import { LibraryPage } from './pages/Library';
 import { ModDetailPage } from './pages/ModDetail';
 import { ModStudioPage } from './pages/ModStudio';
 import { PlayPage } from './pages/Play';
+import { PlayerLabPage } from './pages/PlayerLab';
 import { SettingsPage } from './pages/Settings';
 import { Link, matchRoute, parsePath, useHashPath } from './router';
 import { LibraryProvider } from './state/library';
@@ -61,11 +62,12 @@ function Routes(): JSX.Element {
   }
 
   let page: JSX.Element;
-  if (pathname === '/') page = <HomePage />;
+  if (pathname === '/' ) page = <HomePage />;
   else if (pathname === '/library') page = <LibraryPage />;
   else if (pathname === '/import') page = <ImportPage />;
   else if (pathname === '/studio') page = <ModStudioPage />;
   else if (pathname === '/settings') page = <SettingsPage />;
+  else if (pathname === '/lab/player') page = <PlayerLabPage />;
   else if (modMatch) page = <ModDetailPage modId={modMatch.id} />;
   else page = <NotFound />;
 
@@ -92,7 +94,7 @@ function InstallGate(): JSX.Element {
             <li>
               Tap the share button, then <strong>Add to Home Screen</strong>.
             </li>
-            <li>Open FNF OS from the new icon - the library unlocks there.</li>
+            <li>Open FNF OS from the new icon — the library unlocks there.</li>
           </ul>
         ) : (
           <ul className="list">
@@ -100,7 +102,7 @@ function InstallGate(): JSX.Element {
             <li>
               Choose <strong>Install app</strong> or <strong>Add to Home screen</strong>.
             </li>
-            <li>Open FNF OS from the new icon - the library unlocks there.</li>
+            <li>Open FNF OS from the new icon — the library unlocks there.</li>
           </ul>
         )}
         <div className="row">
