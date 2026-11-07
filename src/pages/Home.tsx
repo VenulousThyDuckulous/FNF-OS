@@ -31,14 +31,20 @@ export function HomePage(): JSX.Element {
         <div>
           <h1>Welcome to FNF OS</h1>
           <p>
-            Your mods, your projects, on your device. Import a mod to get started - everything is analysed
+            Your mods, your projects, on your device. Import a mod to get started — everything is analysed
             locally and never uploaded.
           </p>
         </div>
-        <Link to="/import" className="btn btn-primary">
-          <Icon name="import" size={16} />
-          Quick import
-        </Link>
+        <div className="row" style={{ gap: 8 }}>
+          <Link to="/history" className="btn btn-ghost">
+            <Icon name="star" size={16} />
+            Scores &amp; history
+          </Link>
+          <Link to="/import" className="btn btn-primary">
+            <Icon name="import" size={16} />
+            Quick import
+          </Link>
+        </div>
       </header>
 
       {warning ? (
@@ -84,7 +90,7 @@ export function HomePage(): JSX.Element {
           </Link>
         </div>
         {loading ? (
-          <p className="muted">Loading your library...</p>
+          <p className="muted">Loading your library…</p>
         ) : recentlyAdded.length > 0 ? (
           <div className="mod-grid">
             {recentlyAdded.map((mod) => (
@@ -139,7 +145,7 @@ export function HomePage(): JSX.Element {
         <div style={{ flex: '1 1 260px' }}>
           <h3>Supported import formats</h3>
           <p className="muted" style={{ marginTop: 6 }}>
-            ZIP mod packages - extracted mod folders - complete game ZIPs. Native executables inside an
+            ZIP mod packages · extracted mod folders · complete game ZIPs. Native executables inside an
             archive are never run.
           </p>
         </div>

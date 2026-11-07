@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Shell } from './components/Shell';
 import { Icon } from './components/ui';
 import { isAndroid, isIOS, promptInstall, requiresInstall } from './lib/platform';
+import { HistoryPage } from './pages/History';
 import { HomePage } from './pages/Home';
 import { ImportPage } from './pages/ImportPage';
 import { LaunchMenu } from './pages/LaunchMenu';
@@ -51,7 +52,11 @@ function Routes(): JSX.Element {
   // Phones must install before reaching the library or playback.
   const gated =
     requiresInstall() &&
-    (pathname === '/library' || pathname === '/import' || pathname === '/studio' || Boolean(modMatch));
+    (pathname === '/library' ||
+      pathname === '/import' ||
+      pathname === '/studio' ||
+      pathname === '/history' ||
+      Boolean(modMatch));
 
   if (gated) {
     return (
@@ -67,6 +72,7 @@ function Routes(): JSX.Element {
   else if (pathname === '/import') page = <ImportPage />;
   else if (pathname === '/studio') page = <ModStudioPage />;
   else if (pathname === '/settings') page = <SettingsPage />;
+  else if (pathname === '/history') page = <HistoryPage />;
   else if (pathname === '/lab/player') page = <PlayerLabPage />;
   else if (modMatch) page = <ModDetailPage modId={modMatch.id} />;
   else page = <NotFound />;

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ModCard } from '../components/ModCard';
 import { EmptyState, Icon } from '../components/ui';
 import { engineName } from '../lib/format';
-import { parsePath, useHashPath } from '../router';
+import { Link, parsePath, useHashPath } from '../router';
 import { useLibrary } from '../state/library';
 import { useToast } from '../state/toast';
 
@@ -34,7 +34,11 @@ export function LibraryPage(): JSX.Element {
   }, [queryTerm]);
 
   useEffect(() => {
-    setFilter(initialFilter);
+    if (initialFilter !== filter && initialFilter !== 'all' && initialFilter !== filter) {
+      setFilter(initialFilter);
+    }
+    // Filter changes from the URL are the only external source of truth here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialFilter]);
 
   const filtered = useMemo(() => {
@@ -95,6 +99,10 @@ export function LibraryPage(): JSX.Element {
           </p>
         </div>
         <div className="row">
+          <Link to="/history" className="btn btn-ghost btn-sm">
+            <Icon name="star" size={14} />
+            Scores
+          </Link>
           <label className="sr-only" htmlFor="library-sort">
             Sort
           </label>
