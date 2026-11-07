@@ -58,11 +58,16 @@ export function ImportPage(): JSX.Element {
         const bytes = new Uint8Array(await zip.arrayBuffer());
         applyScan(await scanZip(bytes, zip.name, (stage, ratio) => setProgress({ stage, ratio })));
       } else {
-        const folderName = files[0].name.includes('.')
-          ? 'Imported folder'
-          : (files[0] as File & { webkitRelativePath?: string }).webkitRelativePath?.split('/')[0] ||
-            'Imported folder';
-        applyScan(await scanFolder(files, folderName, (stage, ratio) => setProgress({ stage, ratio })));
+        // Folder selections carry the directory in `webkitRelativePath`; a bare
+        // file list has none. Testing the *file name* for a dot mislabelled every
+        // folder import, because real files (pack.json, Inst.ogg) have extensions.
+        const relative =
+          (files[0] as File & { webkitRelativePath?: string }).webkitRelativePath ?? '';
+        const folderName =
+          relative.split('/')[0] || files[0].name.replace(/\.[^.]+$/, '') || 'Imported folder';
+        applyScan(
+          await scanFolder(files, folderName, (stage, ratio) => setProgress({ stage, ratio })),
+        );
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'The import could not be read.');
@@ -150,12 +155,7 @@ export function ImportPage(): JSX.Element {
           </p>
         </div>
         <div className="row" style={{ justifyContent: 'center' }}>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => zipInput.current?.click()}
-            disabled={busy}
-          >
+          <button type="button" className="btn btn-primary" onClick={() => zipInput.current?.click()} disabled={busy}>
             Choose ZIP
           </button>
           <button type="button" className="btn" onClick={() => folderInput.current?.click()} disabled={busy}>
@@ -275,8 +275,7 @@ export function ImportPage(): JSX.Element {
           </div>
 
           <p className="faint">
-            Library currently holds {pluralise(mods.length, 'mod')}. Imported content stays in this browser
-            only.
+            Library currently holds {pluralise(mods.length, 'mod')}. Imported content stays in this browser only.
           </p>
         </div>
       ) : null}
@@ -329,7 +328,7 @@ function CandidateRow({
         ) : null}
         {candidate.duplicateId ? (
           <p className="faint" style={{ marginTop: 6, color: 'var(--warn)' }}>
-            Looks identical to "{candidate.duplicateName}", already in your library. Import anyway only if
+            Looks identical to “{candidate.duplicateName}”, already in your library. Import anyway only if
             that is intentional.
           </p>
         ) : null}
@@ -353,10 +352,7 @@ function CandidateRow({
           }}
         >
           <option value="auto">
-            Detected
-            {override === undefined && candidate.detection.engine
-              ? ` (${ENGINES[candidate.detection.engine].shortName})`
-              : ''}
+            Detected{override === undefined && candidate.detection.engine ? ` (${ENGINES[candidate.detection.engine].shortName})` : ''}
           </option>
           <option value="unknown">Unknown</option>
           {ENGINE_IDS.map((id) => (
