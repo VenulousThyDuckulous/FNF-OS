@@ -1,0 +1,47 @@
+{
+  "$comment": "Machine-readable mirror of src/lib/engines/registry.ts. Update both together; the TypeScript registry is what the app renders.",
+  "schemaVersion": 1,
+  "updated": "2026-11-07",
+  "engines": [
+    {
+      "id": "psych",
+      "name": "Psych Engine",
+      "upstream": "https://github.com/ShadowMario/FNF-PsychEngine",
+      "license": "Apache-2.0",
+      "import": "supported",
+      "playback": "unavailable",
+      "playbackNote": "No browser runtime has been built or tested for Psych Engine.",
+      "runtimeVersions": []
+    },
+    {
+      "id": "vslice",
+      "name": "Friday Night Funkin' V-Slice",
+      "upstream": "https://github.com/FunkinCrew/Funkin",
+      "license": "Apache-2.0 (code); assets licensed separately",
+      "import": "supported",
+      "playback": "unavailable",
+      "playbackNote": "An official HTML5 build exists, but it has no browser-side mod installation and FNF OS does not bundle base assets.",
+      "runtimeVersions": []
+    },
+    {
+      "id": "kade",
+      "name": "Kade Engine",
+      "upstream": "https://github.com/kadedev/Kade-Engine",
+      "license": "Apache-2.0",
+      "import": "supported",
+      "playback": "unavailable",
+      "playbackNote": "ModCore loading is desktop-only and the project is historical; no browser runtime exists.",
+      "runtimeVersions": []
+    },
+    {
+      "id": "codename",
+      "name": "Codename Engine",
+      "upstream": "https://github.com/CodenameCrew/CodenameEngine",
+      "license": "Apache-2.0 plus README restrictions",
+      "import": "supported",
+      "playback": "unavailable",
+      "playbackNote": "Blocked pending written permission from the Codename Crew; redistribution restrictions apply.",
+      "runtimeVersions": []
+    }
+  ]
+}
