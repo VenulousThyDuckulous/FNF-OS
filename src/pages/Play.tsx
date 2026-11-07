@@ -10,7 +10,16 @@ import { COMPAT_RUNTIME } from '../lib/player/profile';
 import type { RuntimeManifest } from '../lib/runtime/manifest';
 import { readInstalledPackage, resolveRuntime } from '../lib/runtime/manager';
 import { Link, useNavigate } from '../router';
+import {
+  bestFor,
+  listScores,
+  recordFromResult,
+  saveScore,
+  scoreKey,
+  type ScoreRecord,
+} from '../lib/scores';
 import { useLibrary } from '../state/library';
+import { useToast } from '../state/toast';
 
 interface BootedRuntime {
   manifest: RuntimeManifest;
@@ -52,6 +61,8 @@ export function PlayPage({ modId }: { modId: string }): JSX.Element {
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [selected, setSelected] = useState(0);
   const [lastResult, setLastResult] = useState<PlayResult | null>(null);
+  const [best, setBest] = useState<ScoreRecord | null>(null);
+  const { push } = useToast();
 
   const runtime = useMemo(
     () => (mod?.engine ? resolveRuntime(mod.engine, mod.runtimeVersion) : null),
@@ -106,7 +117,7 @@ export function PlayPage({ modId }: { modId: string }): JSX.Element {
           return;
         }
         const { songs, problems } = listSongs(files);
-        const prepared = songs.map((song) => prepareSong(files, song.chartPath));
+        const prepared = songs.map((song) => prepareSong(files, song.chartPath, song.difficulty));
         if (!active) return;
         setPlayback({ files, songs, problems, prepared });
         setSelected(0);
@@ -129,6 +140,69 @@ export function PlayPage({ modId }: { modId: string }): JSX.Element {
 
   const current = playback?.prepared[selected];
   const currentSong = current?.ok ? current.song : null;
+
+  // Personal best for this exact engine + mod + chart + difficulty.
+  useEffect(() => {
+    if (!currentSong) {
+      setBest(null);
+      return;
+    }
+    let active = true;
+    const key = scoreKey({
+      engine: mod?.engine ?? null,
+      modId: mod?.id ?? null,
+      chartPath: currentSong.chartPath,
+      difficulty: currentSong.difficulty,
+    });
+
+    listScores()
+      .then((scores) => {
+        if (active) setBest(bestFor(scores, key));
+      })
+      .catch(() => {
+        if (active) setBest(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [currentSong?.chartPath, currentSong?.difficulty, mod?.engine, mod?.id]);
+
+  const handleResult = useCallback(
+    (result: PlayResult) => {
+      setLastResult(result);
+      if (!mod || !currentSong) return;
+
+      const record = recordFromResult({
+        result,
+        modId: mod.id,
+        modName: mod.name,
+        engine: mod.engine,
+        chartPath: currentSong.chartPath,
+        songTitle: currentSong.title,
+        difficulty: currentSong.difficulty,
+      });
+
+      void saveScore(record)
+        .then(() => {
+          if (!record.autoplay) {
+            setBest((previous) =>
+              previous === null || record.score > previous.score || (record.score === previous.score && record.accuracy > previous.accuracy)
+                ? record
+                : previous,
+            );
+          }
+          push(
+            record.autoplay
+              ? 'Autoplay run saved to history (never ranked).'
+              : `Score saved: ${record.score.toLocaleString()} · ${record.rank}`,
+            'success',
+          );
+        })
+        .catch(() => push('This score could not be saved in this browser.', 'error'));
+    },
+    [currentSong, mod, push],
+  );
 
   const loadAudio = useCallback(
     async (ctx: AudioContext) => {
@@ -247,8 +321,12 @@ export function PlayPage({ modId }: { modId: string }): JSX.Element {
           subtitle={`${COMPAT_RUNTIME.name} · ${COMPAT_RUNTIME.statusLabel.toLowerCase()}`}
           difficulty={currentSong.difficulty}
           loadAudio={loadAudio}
+          files={playback.files}
+          sceneAssets={currentSong.assets}
+          warnings={currentSong.warnings}
+          bestScore={best ? { score: best.score, accuracy: best.accuracy, rank: best.rank } : null}
           onExit={leave}
-          onResult={setLastResult}
+          onResult={handleResult}
         />
       );
     }
