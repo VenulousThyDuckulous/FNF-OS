@@ -203,8 +203,8 @@ export function PlayPage({ modId }: { modId: string }): JSX.Element {
       </div>
 
       <span className="sr-only" aria-live="polite">
-        Playback unavailable: {mod.compat.blockers[0] ?? 'no runtime installed'}. Last opened{' '}
-        {formatRelative(mod.importedAt)}.
+        Playback unavailable: {(mod.compat.blockers[0] ?? 'no runtime installed').replace(/\.$/, '')}. Last
+        opened {formatRelative(mod.lastPlayedAt)}.
       </span>
     </div>
   );
