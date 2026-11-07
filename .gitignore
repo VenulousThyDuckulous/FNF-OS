@@ -1,6 +1,10 @@
 node_modules/
 dist/
 dist-ssr/
+
+# Generated from scripts/make-icons.mjs on install and build
+public/icons/*.png
+
 *.local
 .DS_Store
 .env
