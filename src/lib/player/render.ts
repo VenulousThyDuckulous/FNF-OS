@@ -169,14 +169,19 @@ function drawHud(ctx: CanvasRenderingContext2D, game: GameState, options: Render
   ctx.fillText(`Accuracy ${(accuracyOf(game) * 100).toFixed(1)}%`, width - 18, 44);
   ctx.fillText(`Misses ${game.counts.miss}`, width - 18, 66);
 
+  // Combo sits just off the receptors; the judgement line clears it.
+  const comboY = hitY + (options.downscroll ? 96 : -96);
+  const comboLabelY = hitY + (options.downscroll ? 138 : -138);
+  const judgementY = hitY + (options.downscroll ? 176 : -176);
+
   if (game.combo > 2) {
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(255,255,255,0.9)';
     ctx.font = '700 40px system-ui, sans-serif';
-    ctx.fillText(String(game.combo), width / 2, hitY - (options.downscroll ? -70 : 90));
+    ctx.fillText(String(game.combo), width / 2, comboY);
     ctx.font = '600 12px system-ui, sans-serif';
     ctx.fillStyle = 'rgba(255,255,255,0.45)';
-    ctx.fillText('COMBO', width / 2, hitY - (options.downscroll ? -112 : 132));
+    ctx.fillText('COMBO', width / 2, comboLabelY);
   }
 
   const last = game.lastJudgement;
@@ -186,7 +191,7 @@ function drawHud(ctx: CanvasRenderingContext2D, game: GameState, options: Render
     ctx.globalAlpha = Math.max(0, 1 - progress);
     ctx.fillStyle = JUDGEMENT_COLOURS[last.judgement] ?? '#fff';
     ctx.font = '700 26px system-ui, sans-serif';
-    ctx.fillText(last.judgement.toUpperCase(), width / 2, hitY + (options.downscroll ? 70 : -100));
+    ctx.fillText(last.judgement.toUpperCase(), width / 2, judgementY);
     ctx.globalAlpha = 1;
   }
 
