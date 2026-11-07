@@ -34,6 +34,8 @@ export interface RuntimeHostProps {
   modName: string;
   onExit: (reason: string) => void;
   onFatal: (message: string) => void;
+  /** Lab only: surfaces runtime logs. Gameplay never forwards them. */
+  onLog?: (level: 'info' | 'warn' | 'error', message: string) => void;
 }
 
 export function RuntimeHost({
@@ -44,10 +46,11 @@ export function RuntimeHost({
   modName,
   onExit,
   onFatal,
+  onLog,
 }: RuntimeHostProps): JSX.Element {
   const frame = useRef<HTMLIFrameElement | null>(null);
-  const callbacks = useRef({ onExit, onFatal });
-  callbacks.current = { onExit, onFatal };
+  const callbacks = useRef({ onExit, onFatal, onLog });
+  callbacks.current = { onExit, onFatal, onLog };
 
   const [state, setState] = useState<HostState>('booting');
 
@@ -129,10 +132,14 @@ export function RuntimeHost({
           callbacks.current.onExit(data.reason);
           break;
 
+        case 'runtime:log':
+          // Only the lab asks for runtime output; gameplay ignores it, because
+          // runtime messages are untrusted and can flood the console.
+          callbacks.current.onLog?.(data.level, data.message);
+          break;
+
         default:
-          // `runtime:log` and anything else the guard allows but the shell does not
-          // act on. Logs are deliberately not forwarded to the console: runtime
-          // output is untrusted and can spam.
+          // Anything the guard accepts but the shell does not act on.
           break;
       }
     };
