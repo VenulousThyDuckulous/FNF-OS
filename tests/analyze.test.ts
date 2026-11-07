@@ -14,8 +14,19 @@ describe('analyzeMod', () => {
     const report = analyzeMod({ engine: 'psych', engineVersion: '0.7.3', paths: psychPaths });
     expect(report.level).toBeNull();
     expect(report.verified).toBe(false);
-    expect(report.levelReason).toMatch(/no .* runtime has been published/i);
+    expect(report.levelReason).toMatch(/not yet verified against community mods/i);
     expect(canLaunch(report)).toBe(false);
+  });
+
+  it('still says no runtime exists for engines without one', () => {
+    const report = analyzeMod({ engine: 'codename', engineVersion: null, paths: psychPaths });
+    expect(report.level).toBeNull();
+    expect(report.levelReason).toMatch(/no .* runtime has been published/i);
+  });
+
+  it('warns that scripts will not run under the built-in runtime', () => {
+    const report = analyzeMod({ engine: 'psych', engineVersion: null, paths: psychPaths });
+    expect(report.warnings.join(' ')).toMatch(/does not execute/i);
   });
 
   it('reports the features a mod actually depends on', () => {
@@ -48,11 +59,7 @@ describe('analyzeMod', () => {
   });
 
   it('warns when a mod has no chart', () => {
-    const report = analyzeMod({
-      engine: 'psych',
-      engineVersion: null,
-      paths: ['pack.json', 'songs/x/Inst.ogg'],
-    });
+    const report = analyzeMod({ engine: 'psych', engineVersion: null, paths: ['pack.json', 'songs/x/Inst.ogg'] });
     expect(report.warnings.join(' ')).toMatch(/no chart/i);
   });
 });
