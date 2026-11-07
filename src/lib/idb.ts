@@ -1,7 +1,7 @@
 /** Minimal promise wrapper around IndexedDB. No dependency, no magic. */
 
 export const DB_NAME = 'fnf-os';
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
 export const STORES = {
   mods: 'mods',
@@ -9,6 +9,7 @@ export const STORES = {
   covers: 'covers',
   collections: 'collections',
   projects: 'projects',
+  scores: 'scores',
   meta: 'meta',
 } as const;
 
@@ -29,6 +30,7 @@ export function openDatabase(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORES.covers)) db.createObjectStore(STORES.covers, { keyPath: 'modId' });
       if (!db.objectStoreNames.contains(STORES.collections)) db.createObjectStore(STORES.collections, { keyPath: 'id' });
       if (!db.objectStoreNames.contains(STORES.projects)) db.createObjectStore(STORES.projects, { keyPath: 'id' });
+      if (!db.objectStoreNames.contains(STORES.scores)) db.createObjectStore(STORES.scores, { keyPath: 'id' });
       if (!db.objectStoreNames.contains(STORES.meta)) db.createObjectStore(STORES.meta);
     };
 
