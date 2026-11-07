@@ -1,5 +1,7 @@
 import type { EngineId } from '../engines/types';
 import { sha256Hex } from '../hash';
+import type { RuntimeManifest } from './manifest';
+import { openRuntimePackage, type OpenedRuntimePackage } from './package';
 
 /**
  * Engine runtime manager.
@@ -20,7 +22,7 @@ export interface RuntimePackage {
   version: string;
   /** Absolute URL, e.g. a GitHub Release asset. */
   url: string;
-  /** Lowercase hex SHA-256 of the package. Required - installs are refused without it. */
+  /** Lowercase hex SHA-256 of the package. Required: installs are refused without it. */
   sha256: string;
   bytes: number;
   publishedAt: string;
@@ -35,6 +37,8 @@ export interface InstalledRuntime {
   id: string;
   installedAt: string;
   bytes: number;
+  /** Manifest captured at install time, so the shell can describe it offline. */
+  manifest: RuntimeManifest | null;
 }
 
 const INSTALLED_KEY = 'fnf-os.installed-runtimes';
@@ -61,7 +65,21 @@ export function resolveRuntime(engine: EngineId, pinnedVersion: string | null): 
 export function installedRuntimes(): Record<string, InstalledRuntime> {
   if (typeof localStorage === 'undefined') return {};
   try {
-    return JSON.parse(localStorage.getItem(INSTALLED_KEY) ?? '{}') as Record<string, InstalledRuntime>;
+    const parsed = JSON.parse(localStorage.getItem(INSTALLED_KEY) ?? '{}') as Record<
+      string,
+      Partial<InstalledRuntime>
+    >;
+    const normalised: Record<string, InstalledRuntime> = {};
+    for (const [id, entry] of Object.entries(parsed)) {
+      if (!entry || typeof entry.id !== 'string') continue;
+      normalised[id] = {
+        id: entry.id,
+        installedAt: typeof entry.installedAt === 'string' ? entry.installedAt : new Date(0).toISOString(),
+        bytes: typeof entry.bytes === 'number' ? entry.bytes : 0,
+        manifest: entry.manifest ?? null,
+      };
+    }
+    return normalised;
   } catch {
     return {};
   }
@@ -80,9 +98,15 @@ export async function verifyRuntime(bytes: Uint8Array, expectedSha256: string): 
   return actual === expectedSha256.toLowerCase();
 }
 
+function cacheKey(pkg: RuntimePackage): Request {
+  return new Request(pkg.url);
+}
+
 /**
- * Download, verify and cache a runtime. Refuses to store anything whose hash
- * does not match, so a tampered or truncated download cannot be installed.
+ * Download, verify, inspect and cache a runtime.
+ *
+ * Nothing is stored unless the checksum matches the catalogue entry and the
+ * package's manifest agrees with the entry about id, engine and version.
  */
 export async function installRuntime(
   pkg: RuntimePackage,
@@ -118,15 +142,33 @@ export async function installRuntime(
     offset += chunk.length;
   }
 
-  if (!(await verifyRuntime(bytes, pkg.sha256))) {
-    throw new Error('Runtime package failed its checksum check and was discarded.');
+  const opened = await openRuntimePackage(bytes, pkg.sha256);
+
+  if (opened.manifest.id !== pkg.id) {
+    throw new Error(
+      `Runtime package identifies itself as "${opened.manifest.id}" but the catalogue entry is "${pkg.id}".`,
+    );
+  }
+  if (opened.manifest.engine !== pkg.engine) {
+    throw new Error('Runtime package was built for a different engine than the catalogue entry claims.');
+  }
+  if (opened.manifest.version !== pkg.version) {
+    throw new Error('Runtime package version does not match the catalogue entry.');
   }
 
   const cache = await caches.open(RUNTIME_CACHE);
-  await cache.put(new Request(pkg.url), new Response(bytes, { headers: { 'content-type': 'application/octet-stream' } }));
+  await cache.put(
+    cacheKey(pkg),
+    new Response(bytes, { headers: { 'content-type': 'application/octet-stream' } }),
+  );
 
   const map = installedRuntimes();
-  map[pkg.id] = { id: pkg.id, installedAt: new Date().toISOString(), bytes: received };
+  map[pkg.id] = {
+    id: pkg.id,
+    installedAt: new Date().toISOString(),
+    bytes: received,
+    manifest: opened.manifest,
+  };
   saveInstalled(map);
 }
 
@@ -134,15 +176,26 @@ export async function installRuntime(
 export async function readRuntime(pkg: RuntimePackage): Promise<Uint8Array | null> {
   if (typeof caches === 'undefined') return null;
   const cache = await caches.open(RUNTIME_CACHE);
-  const response = await cache.match(new Request(pkg.url));
+  const response = await cache.match(cacheKey(pkg));
   if (!response) return null;
   return new Uint8Array(await response.arrayBuffer());
+}
+
+/**
+ * Re-open an installed runtime: cached bytes are re-verified against the
+ * catalogue checksum and re-parsed, so a corrupted cache fails loudly instead of
+ * booting something unexpected.
+ */
+export async function readInstalledPackage(pkg: RuntimePackage): Promise<OpenedRuntimePackage | null> {
+  const bytes = await readRuntime(pkg);
+  if (!bytes) return null;
+  return openRuntimePackage(bytes, pkg.sha256);
 }
 
 export async function removeRuntime(pkg: RuntimePackage): Promise<void> {
   if (typeof caches !== 'undefined') {
     const cache = await caches.open(RUNTIME_CACHE);
-    await cache.delete(new Request(pkg.url));
+    await cache.delete(cacheKey(pkg));
   }
   const map = installedRuntimes();
   delete map[pkg.id];
@@ -150,6 +203,9 @@ export async function removeRuntime(pkg: RuntimePackage): Promise<void> {
 }
 
 /** Runtimes installed but not referenced by any mod, offered for cleanup. */
-export function unusedRuntimes(installed: Record<string, InstalledRuntime>, inUse: Set<string>): InstalledRuntime[] {
+export function unusedRuntimes(
+  installed: Record<string, InstalledRuntime>,
+  inUse: Set<string>,
+): InstalledRuntime[] {
   return Object.values(installed).filter((entry) => !inUse.has(entry.id));
 }
