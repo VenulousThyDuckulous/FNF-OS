@@ -8,10 +8,17 @@
  * guess.
  *
  * Layout handled: `{ "song": { ... } }` (Psych 0.5-1.0) and a bare chart object.
+ * Current V-Slice charts are detected and sent to `vslice.ts`; older V-Slice
+ * charts use this same section layout and are read here.
  * Note times are absolute milliseconds and are used as-is.
  */
 
+import { isVSliceChart, parseVSliceChart } from './vslice';
+
 export type Lane = 0 | 1 | 2 | 3;
+
+/** Which chart dialect was read. Shown in the UI and saved with scores. */
+export type ChartFormat = 'psych' | 'vslice';
 
 export const LANE_COUNT = 4;
 
@@ -40,12 +47,16 @@ export interface ChartEvent {
 }
 
 export interface ParsedChart {
+  format: ChartFormat;
   title: string;
   bpm: number;
+  /** Difficulty key from the chart itself (V-Slice) or its file name. */
+  difficulty: string | null;
   /** Scroll speed declared by the chart; 1.0-3.0 in practice. */
   speed: number;
   player1: string;
   player2: string;
+  gf: string;
   stage: string;
   needsVoices: boolean;
   sections: ChartSection[];
@@ -61,7 +72,13 @@ export interface ParsedChart {
   noteTypes: string[];
 }
 
-export type ChartProblem = 'not-json' | 'not-a-chart' | 'no-sections' | 'no-notes' | 'bad-times';
+export type ChartProblem =
+  | 'not-json'
+  | 'not-a-chart'
+  | 'no-sections'
+  | 'no-notes'
+  | 'bad-times'
+  | 'unsupported-time-format';
 
 export class ChartError extends Error {
   readonly problem: ChartProblem;
@@ -93,6 +110,8 @@ function toText(value: unknown, fallback: string): string {
  */
 export function parseChart(raw: unknown): ParsedChart {
   if (!isRecord(raw)) throw new ChartError('not-a-chart', 'Chart JSON is not an object.');
+
+  if (isVSliceChart(raw)) return parseVSliceChart(raw);
 
   const root = isRecord(raw.song) ? raw.song : raw;
 
@@ -171,12 +190,15 @@ export function parseChart(raw: unknown): ParsedChart {
   const events = parseEvents(root.events);
 
   return {
+    format: 'psych',
     title: toText(root.song, 'Untitled song'),
     // The song tempo, not whatever the last section changed it to.
     bpm: startBpm,
+    difficulty: null,
     speed,
     player1: toText(root.player1, 'bf'),
     player2: toText(root.player2, 'dad'),
+    gf: toText(root.gfVersion ?? root.gf, 'gf'),
     stage: toText(root.stage, 'stage'),
     needsVoices: root.needsVoices !== false,
     sections,

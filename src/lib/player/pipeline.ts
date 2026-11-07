@@ -1,33 +1,55 @@
 import type { EntryMap } from '../import/zip';
+import { resolveCharacterAssets, resolveStageAssets, type CharacterAssets, type StageAssets } from './characters';
 import { ChartError, parseChart, type ParsedChart } from './chart';
+import { isSupportedEvent } from './events';
+import { resolveNoteSkin, type NoteSkinSource } from './skins';
+import {
+  isVSliceChart,
+  parseVSliceChart,
+  parseVSliceMetadata,
+  vsliceDifficulties,
+  type VSliceMetadata,
+} from './vslice';
 
 /**
  * Turning an imported mod into something playable.
  *
  * The steps are deliberately explicit and each can fail on its own:
  *
- * 1. find chart files inside the mod,
- * 2. parse them as Psych charts,
+ * 1. find chart files inside the mod (Psych `data/**` charts and V-Slice
+ *    `songs/**` charts),
+ * 2. parse them in the dialect they are actually written in,
  * 3. find the instrumental (and vocals) for the song,
- * 4. report what will not be honoured (Lua, events, custom notes).
+ * 4. find the optional art - note skin, characters, stage,
+ * 5. report what will not be honoured (Lua, unsupported events, custom notes).
  *
  * Anything missing produces a named failure with the path that was looked for,
  * so the player shows a real cause instead of a generic error.
  */
 
 export interface SongListing {
-  /** Chart path, used as the stable id. */
+  /** Stable id: chart path, plus the difficulty for V-Slice charts. */
   id: string;
   chartPath: string;
   directory: string;
   difficulty: string;
   title: string;
+  format: 'psych' | 'vslice';
   chart: ParsedChart;
+}
+
+export interface ScenePaths {
+  noteSkin: NoteSkinSource | null;
+  player: CharacterAssets | null;
+  opponent: CharacterAssets | null;
+  stage: StageAssets;
 }
 
 export interface PlayableSong extends SongListing {
   audio: { instrumental: string; voices: string | null };
+  assets: ScenePaths;
   warnings: string[];
+  unsupportedEvents: string[];
 }
 
 export type PrepareFailure = { reason: string; detail: string };
@@ -35,10 +57,12 @@ export type PrepareResult = { ok: true; song: PlayableSong } | { ok: false; fail
 
 const AUDIO_EXTENSIONS = ['ogg', 'mp3', 'wav'] as const;
 
-/** `data/<anything>/<file>.json`, with an optional `assets/` root. */
-const CHART_RE = /(^|\/)(?:assets\/)?data\/(.+)\/([^/]+)\.json$/;
+/** Psych: `data/<anything>/<file>.json`, with an optional `assets/` root. */
+const PSYCH_CHART_RE = /(^|\/)(?:assets\/)?data\/(.+)\/([^/]+)\.json$/;
+/** V-Slice: `songs/<song>/<file>.json`, with an optional `assets/` root. */
+const VSLICE_CHART_RE = /(^|\/)(?:assets\/)?songs\/([^/]+)\/([^/]+)\.json$/;
 
-const CONFIG_BASENAMES = new Set(['config', 'reset', 'options', 'preferences']);
+const CONFIG_BASENAMES = new Set(['config', 'reset', 'options', 'preferences', 'metadata', 'meta']);
 
 const MAX_CHART_BYTES = 16 * 1024 * 1024;
 
@@ -68,6 +92,25 @@ export function difficultyFromName(name: string): string {
   return 'normal';
 }
 
+/** Read `metadata.json` sitting next to a V-Slice chart, if present. */
+function readMetadata(files: EntryMap, chartPath: string): VSliceMetadata | null {
+  const directory = chartPath.slice(0, chartPath.lastIndexOf('/'));
+  const stem = chartPath.slice(chartPath.lastIndexOf('/') + 1).replace(/\.json$/i, '');
+
+  const candidates = [`${directory}/metadata.json`, `${directory}/${stem}-metadata.json`, `${directory}/meta.json`];
+  for (const candidate of candidates) {
+    const text = readText(files, candidate);
+    if (!text) continue;
+    try {
+      const parsed = parseVSliceMetadata(JSON.parse(text) as unknown);
+      if (parsed) return parsed;
+    } catch {
+      // A malformed metadata file must not stop the chart from being read.
+    }
+  }
+  return null;
+}
+
 /**
  * List every chart in a mod that this runtime can read. Unparseable charts are
  * reported with their problem rather than dropped silently.
@@ -80,8 +123,10 @@ export function listSongs(files: EntryMap): { songs: SongListing[]; problems: st
     const normalised = path.replace(/\\/g, '/');
     if (!/\.json$/i.test(normalised)) continue;
 
-    const match = CHART_RE.exec(normalised.toLowerCase());
-    if (!match) continue;
+    const lower = normalised.toLowerCase();
+    const psychMatch = PSYCH_CHART_RE.exec(lower);
+    const vsliceMatch = VSLICE_CHART_RE.exec(lower);
+    if (!psychMatch && !vsliceMatch) continue;
 
     const fileName = normalised.slice(normalised.lastIndexOf('/') + 1);
     const stem = fileName.replace(/\.json$/i, '');
@@ -97,14 +142,45 @@ export function listSongs(files: EntryMap): { songs: SongListing[]; problems: st
       continue;
     }
 
+    let raw: unknown;
     try {
-      const chart = parseChart(JSON.parse(text) as unknown);
+      raw = JSON.parse(text) as unknown;
+    } catch {
+      problems.push(`${path}: chart file is not valid JSON.`);
+      continue;
+    }
+
+    try {
+      if (isVSliceChart(raw)) {
+        const metadata = readMetadata(files, path);
+        const difficulties = vsliceDifficulties(raw);
+        if (difficulties.length === 0) {
+          problems.push(`${path}: V-Slice chart has no difficulties.`);
+          continue;
+        }
+        for (const difficulty of difficulties) {
+          const chart = parseVSliceChart(raw, { difficulty, metadata });
+          songs.push({
+            id: `${path}#${difficulty}`,
+            chartPath: path,
+            directory: path.slice(0, path.lastIndexOf('/')),
+            difficulty,
+            title: metadata?.songName ?? chart.title,
+            format: 'vslice',
+            chart,
+          });
+        }
+        continue;
+      }
+
+      const chart = parseChart(raw);
       songs.push({
         id: path,
         chartPath: path,
         directory: path.slice(0, path.lastIndexOf('/')),
         difficulty: difficultyFromName(stem),
         title: chart.title,
+        format: chart.format,
         chart,
       });
     } catch (error) {
@@ -120,23 +196,20 @@ export function listSongs(files: EntryMap): { songs: SongListing[]; problems: st
     }
   }
 
-  songs.sort((a, b) => a.title.localeCompare(b.title) || a.difficulty.localeCompare(b.difficulty));
-
-  if (songs.length > 1) {
-    // Prefer the chart the mod most likely wants to be played with.
-    const rank = (difficulty: string): number =>
-      difficulty === 'normal' ? 0 : difficulty === 'hard' ? 1 : difficulty === 'easy' ? 2 : 3;
-    songs.sort((a, b) => rank(a.difficulty) - rank(b.difficulty));
-  }
+  // Prefer the chart the mod most likely wants to be played with.
+  const rank = (difficulty: string): number =>
+    difficulty === 'normal' ? 0 : difficulty === 'hard' ? 1 : difficulty === 'easy' ? 2 : 3;
+  songs.sort(
+    (a, b) =>
+      a.title.localeCompare(b.title) ||
+      rank(a.difficulty) - rank(b.difficulty) ||
+      a.difficulty.localeCompare(b.difficulty),
+  );
 
   return { songs, problems };
 }
 
-function findAudioFile(
-  index: Map<string, string>,
-  token: string,
-  directoryName: string,
-): string | null {
+function findAudioFile(index: Map<string, string>, token: string, directoryName: string): string | null {
   const bases = [`${directoryName}/`, ''];
   const roots = ['songs/', 'music/', 'audio/', ''];
 
@@ -161,7 +234,6 @@ function findAudioFile(
     }
   }
 
-  // Fall back to any matching basename whose folder mentions the song.
   const wanted = `${token}.`;
   let loose: string | null = null;
   for (const [lower, original] of index) {
@@ -180,15 +252,25 @@ function findAudioFile(
  * is missing, because "no audio" is the most common reason a Psych mod folder
  * cannot be played on its own.
  */
-export function prepareSong(files: EntryMap, chartPath: string): PrepareResult {
+export function prepareSong(files: EntryMap, chartPath: string, difficulty?: string): PrepareResult {
   const text = readText(files, chartPath);
   if (text === null) {
     return { ok: false, failure: { reason: 'chart-missing', detail: `Chart "${chartPath}" is not in this mod.` } };
   }
 
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text) as unknown;
+  } catch {
+    return { ok: false, failure: { reason: 'chart-invalid', detail: 'Chart file is not valid JSON.' } };
+  }
+
+  const isVSlice = isVSliceChart(raw);
+  const metadata = isVSlice ? readMetadata(files, chartPath) : null;
+
   let chart: ParsedChart;
   try {
-    chart = parseChart(JSON.parse(text) as unknown);
+    chart = isVSlice ? parseVSliceChart(raw, { difficulty, metadata }) : parseChart(raw);
   } catch (error) {
     return {
       ok: false,
@@ -212,6 +294,7 @@ export function prepareSong(files: EntryMap, chartPath: string): PrepareResult {
   const index = buildIndex(files);
   const directoryName = chartPath.slice(0, chartPath.lastIndexOf('/')).split('/').pop() ?? '';
   const songName = directoryName || chart.title;
+  const title = metadata?.songName ?? chart.title;
 
   const instrumental = findAudioFile(index, 'inst', songName);
   if (!instrumental) {
@@ -248,23 +331,43 @@ export function prepareSong(files: EntryMap, chartPath: string): PrepareResult {
     );
   }
 
-  if (chart.events.length > 0) {
+  const unsupportedEvents = [
+    ...new Set(chart.events.filter((event) => !isSupportedEvent(event.name)).map((event) => event.name)),
+  ];
+  if (unsupportedEvents.length > 0) {
     warnings.push(
-      `${chart.events.length} chart event${chart.events.length === 1 ? '' : 's'} are read but not applied yet (no camera, character or stage effects).`,
+      `${unsupportedEvents.length} event type${unsupportedEvents.length === 1 ? '' : 's'} will be reported but not applied (${unsupportedEvents.slice(0, 4).join(', ')}).`,
     );
+  }
+
+  const assets: ScenePaths = {
+    noteSkin: resolveNoteSkin(files),
+    player: resolveCharacterAssets(files, chart.player1),
+    opponent: resolveCharacterAssets(files, chart.player2),
+    stage: resolveStageAssets(files, chart.stage),
+  };
+
+  if (!assets.player && !assets.opponent) {
+    warnings.push('No character sprites were found for this chart; the highway plays without characters.');
+  }
+  if (!assets.stage.backgroundPath) {
+    warnings.push('No stage background was found; the runtime uses its own backdrop.');
   }
 
   return {
     ok: true,
     song: {
-      id: chartPath,
+      id: isVSlice ? `${chartPath}#${chart.difficulty ?? 'normal'}` : chartPath,
       chartPath,
       directory: directoryName,
-      difficulty: difficultyFromName(chartPath.slice(chartPath.lastIndexOf('/') + 1).replace(/\.json$/i, '')),
-      title: chart.title,
+      difficulty: chart.difficulty ?? difficultyFromName(chartPath.slice(chartPath.lastIndexOf('/') + 1).replace(/\.json$/i, '')),
+      title,
+      format: chart.format,
       chart,
       audio: { instrumental, voices },
+      assets,
       warnings,
+      unsupportedEvents,
     },
   };
 }
