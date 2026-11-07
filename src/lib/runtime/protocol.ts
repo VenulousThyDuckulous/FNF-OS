@@ -22,7 +22,8 @@ export const MAX_MISSED_PINGS = 3;
 
 export interface RuntimeIdentity {
   id: string;
-  engine: EngineId;
+  /** Null only for reference runtimes, which are not engine builds. */
+  engine: EngineId | null;
   version: string;
 }
 

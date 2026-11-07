@@ -3,10 +3,13 @@ import { ENGINE_IDS, type EngineFeature, type EngineId, type FeatureSupport } fr
 /**
  * Runtime package manifests.
  *
- * A runtime is a self-contained web bundle for one engine at one version. The
- * manifest is the contract between whoever publishes that bundle and FNF OS, so
- * it is validated strictly: a manifest that cannot be parsed is a package that
- * cannot be installed.
+ * A runtime is a self-contained web bundle. Two kinds exist:
+ *
+ * - `engine`: an engine build for one version. It must name its engine and may
+ *   declare per-feature support.
+ * - `reference`: the host self-test shipped in `public/lab/reference`. It is not
+ *   an engine, must not name one, and must not declare engine features, so it can
+ *   never be mistaken for playback support.
  *
  * The package's own SHA-256 is deliberately *not* in the manifest. A file cannot
  * contain the hash of itself, so the checksum lives in the runtime catalogue
@@ -46,18 +49,22 @@ const FEATURE_IDS: EngineFeature[] = [
 
 const SUPPORT_LEVELS: FeatureSupport[] = ['supported', 'partial', 'unsupported', 'unknown'];
 
+export type RuntimeKind = 'engine' | 'reference';
+
 export interface RuntimeManifest {
   schemaVersion: 1;
+  kind: RuntimeKind;
   /** Stable package id, e.g. `psych-0.7.3-web`. */
   id: string;
-  engine: EngineId;
+  /** Engine this runtime serves. Always null for `reference` runtimes. */
+  engine: EngineId | null;
   /** Engine version this runtime serves. */
   version: string;
   /** HTML entry point, relative to the package root. */
   entry: string;
   /** ISO date the package was published. */
   publishedAt: string;
-  /** Licence of the bundled engine build, as reviewed for this package. */
+  /** Licence of the bundled build, as reviewed for this package. */
   license: string;
   /** What this runtime actually supports. Absent keys mean unknown. */
   features: Partial<Record<EngineFeature, FeatureSupport>>;
@@ -105,14 +112,26 @@ export function parseRuntimeManifest(input: unknown): RuntimeManifest {
     );
   }
 
+  const kind = input.kind ?? 'engine';
+  if (kind !== 'engine' && kind !== 'reference') {
+    fail(`Runtime manifest kind must be "engine" or "reference", not "${String(kind)}".`);
+  }
+
   const id = input.id;
   if (typeof id !== 'string' || !/^[a-z0-9][a-z0-9._-]{2,63}$/.test(id)) {
     fail('Runtime manifest needs a lowercase id such as `psych-0.7.3-web`.');
   }
 
-  const engine = input.engine;
-  if (typeof engine !== 'string' || !(ENGINE_IDS as string[]).includes(engine)) {
-    fail(`Runtime manifest names an unknown engine: ${String(engine)}.`);
+  const rawEngine = input.engine;
+  let engine: EngineId | null = null;
+
+  if (kind === 'engine') {
+    if (typeof rawEngine !== 'string' || !(ENGINE_IDS as string[]).includes(rawEngine)) {
+      fail(`Runtime manifest names an unknown engine: ${String(rawEngine)}.`);
+    }
+    engine = rawEngine as EngineId;
+  } else if (rawEngine !== undefined && rawEngine !== null) {
+    fail('A reference runtime must not claim an engine.');
   }
 
   const version = input.version;
@@ -132,7 +151,7 @@ export function parseRuntimeManifest(input: unknown): RuntimeManifest {
 
   const license = input.license;
   if (typeof license !== 'string' || license.trim().length === 0) {
-    fail('Runtime manifest must name the licence of the bundled engine build.');
+    fail('Runtime manifest must name the licence of the bundled build.');
   }
 
   if (!isRecord(input.features)) fail('Runtime manifest needs a `features` object.');
@@ -145,13 +164,18 @@ export function parseRuntimeManifest(input: unknown): RuntimeManifest {
     features[key as EngineFeature] = value as FeatureSupport;
   }
 
+  if (kind === 'reference' && Object.keys(features).length > 0) {
+    fail('A reference runtime must not declare engine feature support.');
+  }
+
   const notes = input.notes;
   if (notes !== undefined && typeof notes !== 'string') fail('Runtime manifest `notes` must be text.');
 
   return {
     schemaVersion: RUNTIME_SCHEMA_VERSION,
+    kind,
     id,
-    engine: engine as EngineId,
+    engine,
     version,
     entry,
     publishedAt,
