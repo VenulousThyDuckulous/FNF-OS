@@ -17,7 +17,8 @@ import { openRuntimePackage, type OpenedRuntimePackage } from './package';
 
 export interface RuntimePackage {
   id: string;
-  engine: EngineId;
+  /** Null for the reference runtime, which is not an engine build. */
+  engine: EngineId | null;
   /** Runtime version, pinned by mods. */
   version: string;
   /** Absolute URL, e.g. a GitHub Release asset. */
@@ -142,6 +143,23 @@ export async function installRuntime(
     offset += chunk.length;
   }
 
+  await installRuntimeBytes(pkg, bytes);
+}
+
+/**
+ * Install a runtime from bytes already in memory (used by the lab self-test).
+ *
+ * Same guarantees as {@link installRuntime}: nothing is cached unless the
+ * checksum matches and the manifest agrees with the catalogue entry.
+ */
+export async function installRuntimeBytes(
+  pkg: RuntimePackage,
+  bytes: Uint8Array,
+): Promise<RuntimeManifest> {
+  if (!pkg.sha256 || !/^[a-f0-9]{64}$/i.test(pkg.sha256)) {
+    throw new Error('Runtime package has no valid SHA-256 checksum; refusing to install.');
+  }
+
   const opened = await openRuntimePackage(bytes, pkg.sha256);
 
   if (opened.manifest.id !== pkg.id) {
@@ -156,20 +174,25 @@ export async function installRuntime(
     throw new Error('Runtime package version does not match the catalogue entry.');
   }
 
+  // Copy into a fresh ArrayBuffer: `Response` does not accept a possibly
+  // shared-backed view, and the cached copy must not alias the caller's bytes.
+  const body = new Uint8Array(bytes).buffer;
   const cache = await caches.open(RUNTIME_CACHE);
   await cache.put(
     cacheKey(pkg),
-    new Response(bytes, { headers: { 'content-type': 'application/octet-stream' } }),
+    new Response(body, { headers: { 'content-type': 'application/octet-stream' } }),
   );
 
   const map = installedRuntimes();
   map[pkg.id] = {
     id: pkg.id,
     installedAt: new Date().toISOString(),
-    bytes: received,
+    bytes: bytes.length,
     manifest: opened.manifest,
   };
   saveInstalled(map);
+
+  return opened.manifest;
 }
 
 /** Fetch a cached runtime body. Returns null when it is not installed. */
