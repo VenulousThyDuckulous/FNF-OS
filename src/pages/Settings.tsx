@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { LabSection } from '../components/LabSection';
 import { Icon, Section } from '../components/ui';
 import { ENGINE_LIST } from '../lib/engines/registry';
+import { supportMatrix } from '../lib/engines/support';
 import { STATUS_LABEL } from '../lib/engines/types';
+import { engineName } from '../lib/format';
 import { formatBytes } from '../lib/import/safety';
-import { RUNTIME_CATALOG } from '../lib/runtime/manager';
+import { installedRuntimes, RUNTIME_CATALOG } from '../lib/runtime/manager';
 import { readStorage, requestPersistence, storageWarning, type StorageSnapshot } from '../lib/storage';
 import { ACCENT_PRESETS, useSettings, type ThemeMode } from '../state/settings';
 import { useToast } from '../state/toast';
@@ -22,6 +25,13 @@ export function SettingsPage(): JSX.Element {
   }, [storage]);
 
   const warning = snapshot ? storageWarning(snapshot) : null;
+
+  const support = useMemo(() => {
+    const manifests = Object.values(installedRuntimes()).flatMap((entry) =>
+      entry.manifest ? [entry.manifest] : [],
+    );
+    return supportMatrix(manifests);
+  }, []);
 
   return (
     <div className="stack" style={{ gap: 26 }}>
@@ -106,9 +116,7 @@ export function SettingsPage(): JSX.Element {
           <div className="row" style={{ justifyContent: 'space-between' }}>
             <span className="muted">Used</span>
             <span>
-              {snapshot?.usage !== null && snapshot?.usage !== undefined
-                ? formatBytes(snapshot.usage)
-                : 'Unknown'}
+              {snapshot?.usage !== null && snapshot?.usage !== undefined ? formatBytes(snapshot.usage) : 'Unknown'}
               {snapshot?.quota ? ` of ~${formatBytes(snapshot.quota)}` : ''}
             </span>
           </div>
@@ -182,7 +190,7 @@ export function SettingsPage(): JSX.Element {
                   <li key={index}>{limitation}</li>
                 ))}
                 <li>
-                  Licence: {engine.license} - {engine.licenseNote}
+                  Licence: {engine.license} — {engine.licenseNote}
                 </li>
               </ul>
             </div>
@@ -202,6 +210,43 @@ export function SettingsPage(): JSX.Element {
           </div>
         </div>
       </Section>
+
+      <Section
+        title="Engine feature support"
+        description="Derived from the manifests of installed engine runtimes. A feature only leaves “unknown” when a runtime declares it, never because the desktop engine has it."
+      >
+        <div className="stack" style={{ gap: 10 }}>
+          {support.map((entry) => (
+            <div className="card" key={entry.engine}>
+              <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+                <strong>{engineName(entry.engine)}</strong>
+                <span className="badge">
+                  {entry.manifest ? `runtime ${entry.manifest.version}` : 'no runtime'}
+                </span>
+              </div>
+              <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
+                {entry.rows.map((row) => (
+                  <span
+                    key={row.feature}
+                    className="badge"
+                    title={`${row.label}: ${row.support}`}
+                    data-support={row.support}
+                  >
+                    {row.label}
+                    <span className="faint"> · {row.support}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+          <p className="faint">
+            No engine runtime has been published, so every cell above is unknown. This table fills in from real
+            runtime manifests; it is never edited by hand to look complete.
+          </p>
+        </div>
+      </Section>
+
+      <LabSection />
 
       <Section title="About">
         <div className="card stack">
