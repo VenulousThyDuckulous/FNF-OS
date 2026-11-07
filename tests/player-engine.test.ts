@@ -86,14 +86,17 @@ describe('gameplay simulation', () => {
     for (let time = 0; time <= 5000; time += 16) advanceGame(game, time);
 
     expect(game.finished).toBe(true);
-    expect(game.counts.sick).toBe(game.chart.playerNotes);
+    // Six heads plus the tail of the chart's one sustain note.
+    expect(game.counts.sick).toBe(7);
     expect(game.counts.miss).toBe(0);
-    expect(game.combo).toBe(game.chart.playerNotes);
-    expect(game.maxCombo).toBe(game.chart.playerNotes);
+    expect(game.combo).toBe(7);
+    expect(game.maxCombo).toBe(7);
     expect(accuracyOf(game)).toBe(1);
 
     const results = resultsOf(game);
     expect(results.playerNotes).toBe(6);
+    expect(results.unitsTotal).toBe(7);
+    expect(results.holdCompletions).toBe(1);
     expect(results.failed).toBe(false);
     expect(results.accuracy).toBe(1);
   });

@@ -73,7 +73,9 @@ describe('song preparation', () => {
     if (!result.ok) return;
     expect(result.song.audio.instrumental).toBe('MyMod/songs/bopeebo/Inst.ogg');
     expect(result.song.audio.voices).toBe('MyMod/songs/bopeebo/Voices.ogg');
-    expect(result.song.warnings).toEqual([]);
+    // With no art in the archive the runtime warns rather than failing the song.
+    expect(result.song.warnings.join(' ')).toMatch(/No character sprites/);
+    expect(result.song.warnings.join(' ')).not.toMatch(/Lua|HScript/);
   });
 
   it('accepts case differences in audio file names', () => {
@@ -121,17 +123,20 @@ describe('song preparation', () => {
       'scripts/stage.hx': 'class Stage {}',
     });
     const withEvents = new Map(files);
-    const base = chart('Test', [
-      [1000, 4, 0, 'mine'],
-      [1500, 5, 250],
-    ]);
     withEvents.set(
       'data/test/test.json',
       encoder.encode(
         JSON.stringify({
+          ...chart('Test', [
+            [1000, 4, 0, 'mine'],
+            [1500, 5, 250],
+          ]),
           song: {
-            ...base.song,
-            events: [[900, [['Camera Zoom', 1.1, 1]]]],
+            ...chart('Test', [
+              [1000, 4, 0, 'mine'],
+              [1500, 5, 250],
+            ]).song,
+            events: [[900, [['Set GF Speed', 2, 1]]]],
           },
         }),
       ),
