@@ -6,6 +6,7 @@ import { supportMatrix } from '../lib/engines/support';
 import { STATUS_LABEL } from '../lib/engines/types';
 import { engineName } from '../lib/format';
 import { formatBytes } from '../lib/import/safety';
+import { RUNTIME_CANDIDATES, type CandidateStatus } from '../lib/runtime/catalogue';
 import { installedRuntimes, RUNTIME_CATALOG } from '../lib/runtime/manager';
 import { readStorage, requestPersistence, storageWarning, type StorageSnapshot } from '../lib/storage';
 import { ACCENT_PRESETS, useSettings, type ThemeMode } from '../state/settings';
@@ -13,6 +14,14 @@ import { useToast } from '../state/toast';
 import { useLibrary } from '../state/library';
 
 const VERSION = '1.0.0-alpha.1';
+
+const CANDIDATE_STATUS_LABEL: Record<CandidateStatus, string> = {
+  candidate: 'candidate',
+  untested: 'untested',
+  unverifiable: 'unverifiable',
+  'blocked-licence': 'blocked: licence',
+  'no-browser-build': 'no usable browser build',
+};
 
 export function SettingsPage(): JSX.Element {
   const { settings, setTheme, setAccent, resetAppearance, reopenLaunch } = useSettings();
@@ -244,6 +253,48 @@ export function SettingsPage(): JSX.Element {
           <p className="faint">
             No engine runtime has been published, so every cell above is unknown. This table fills in from real
             runtime manifests; it is never edited by hand to look complete.
+          </p>
+        </div>
+      </Section>
+
+      <Section
+        title="Browser runtimes under research"
+        description="Projects that exist today and what each still needs. Nothing listed here is installed, launchable or counted as support."
+      >
+        <div className="stack" style={{ gap: 10 }}>
+          {RUNTIME_CANDIDATES.map((candidate) => (
+            <div className="card" key={candidate.id}>
+              <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+                <strong>{candidate.name}</strong>
+                <span className="badge">{CANDIDATE_STATUS_LABEL[candidate.status]}</span>
+              </div>
+              <p className="muted" style={{ marginBottom: 8 }}>
+                {candidate.summary}
+              </p>
+              <p className="faint" style={{ marginBottom: 8 }}>
+                {candidate.kind} · {candidate.license} · distribution: {candidate.distribution} · build:{' '}
+                {candidate.buildStatus}
+              </p>
+              <ul className="list">
+                {candidate.missing.map((item, index) => (
+                  <li key={index}>{item}</li>
+                ))}
+              </ul>
+              <a
+                href={candidate.upstream}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="btn btn-sm"
+                style={{ alignSelf: 'flex-start', marginTop: 10 }}
+              >
+                Source
+                <Icon name="external" size={13} />
+              </a>
+            </div>
+          ))}
+          <p className="faint">
+            The catalogue stays empty: an entry needs a redistributable build, a reviewed checksum, a mod format that
+            has loaded in a real test, and a passed run against a real mod.
           </p>
         </div>
       </Section>
