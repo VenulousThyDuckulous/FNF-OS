@@ -205,7 +205,9 @@ export function SettingsPage(): JSX.Element {
                     : `${RUNTIME_CATALOG.length} available.`}
                 </p>
               </div>
-              <span className="badge badge-warn">0 installed</span>
+              <span className="badge badge-warn">
+                {Object.keys(installedRuntimes()).length} cached on this device
+              </span>
             </div>
           </div>
         </div>
