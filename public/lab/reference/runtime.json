@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "kind": "reference",
+  "id": "reference-host-selftest",
+  "version": "1.0.0",
+  "entry": "index.html",
+  "publishedAt": "2026-11-07T00:00:00.000Z",
+  "license": "MIT",
+  "features": {},
+  "notes": "Host self-test. Not an engine runtime and not game playback."
+}

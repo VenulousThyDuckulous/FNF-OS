@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FNF OS reference runtime</title>
+    <style>
+      :root { color-scheme: dark; }
+      body {
+        margin: 0;
+        padding: 20px;
+        font: 14px/1.6 ui-sans-serif, system-ui, -apple-system, sans-serif;
+        background: #0e0f12;
+        color: #e9ebef;
+      }
+      h1 { font-size: 18px; margin: 0 0 6px; }
+      p { margin: 0 0 12px; color: #9aa1ad; }
+      strong { color: #e9ebef; }
+      pre {
+        margin: 0;
+        padding: 12px;
+        min-height: 140px;
+        border: 1px solid #262a33;
+        border-radius: 10px;
+        background: #14161b;
+        white-space: pre-wrap;
+        font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>FNF OS reference runtime</h1>
+    <p>
+      Host self-test. This is <strong>not</strong> an engine and does not play Friday Night Funkin'. It proves the
+      sandbox, message protocol, integrity check and virtual filesystem only.
+    </p>
+    <pre id="log">booting…</pre>
+    <script>
+      (function () {
+        'use strict';
+
+        var out = document.getElementById('log');
+        var lines = [];
+
+        function log(message) {
+          lines.push(message);
+          out.textContent = lines.join('\n');
+        }
+
+        function send(message) {
+          parent.postMessage(message, '*');
+        }
+
+        var buffer = null;
+
+        window.addEventListener('message', function (event) {
+          var data = event.data;
+          if (!data || typeof data !== 'object') return;
+
+          if (data.type === 'runtime:ping') {
+            send({ type: 'runtime:pong', nonce: data.nonce });
+            return;
+          }
+          if (data.type === 'runtime:shutdown') {
+            log('shutdown requested');
+            return;
+          }
+          if (data.type === 'runtime:init') {
+            onInit(data);
+            return;
+          }
+          if (data.type === 'runtime:file-result') {
+            onFile(data);
+          }
+        });
+
+        function onInit(init) {
+          log('host protocol ' + init.protocol + ' accepted');
+          log('runtime ' + init.runtime.id + ' v' + init.runtime.version);
+          log('mod "' + init.mod.name + '" exposes ' + init.files.length + ' file(s)');
+
+          var probe = null;
+          for (var i = 0; i < init.files.length; i += 1) {
+            if (/\.json$/i.test(init.files[i])) {
+              probe = init.files[i];
+              break;
+            }
+          }
+          if (!probe) probe = init.files[0] || null;
+
+          if (!probe) {
+            log('no readable files in this mod; virtual filesystem idle');
+            send({ type: 'runtime:log', level: 'warn', message: 'no files to read' });
+            return;
+          }
+
+          log('requesting ' + probe);
+          send({ type: 'runtime:file-request', requestId: 1, path: probe, offset: 0 });
+        }
+
+        function onFile(result) {
+          if (!result.ok) {
+            log('file error: ' + result.error);
+            send({ type: 'runtime:error', message: result.error, fatal: false });
+            return;
+          }
+
+          var chunk = new Uint8Array(result.data);
+          if (!buffer || buffer.length !== result.total) {
+            buffer = new Uint8Array(result.total);
+          }
+          buffer.set(chunk, result.offset);
+
+          if (!result.done) {
+            send({
+              type: 'runtime:file-request',
+              requestId: result.requestId + 1,
+              path: result.path,
+              offset: result.offset + chunk.length
+            });
+            return;
+          }
+
+          log('read ' + result.path + ' (' + buffer.length + ' bytes)');
+          send({
+            type: 'runtime:log',
+            level: 'info',
+            message: 'vfs read ok: ' + result.path + ' ' + buffer.length + ' bytes'
+          });
+          finish(result.path);
+        }
+
+        function finish(path) {
+          if (!window.crypto || !window.crypto.subtle) {
+            log('crypto.subtle unavailable; skipping digest');
+            send({ type: 'runtime:exit', reason: 'self-test complete' });
+            return;
+          }
+          window.crypto.subtle
+            .digest('SHA-256', buffer)
+            .then(function (digest) {
+              var hex = Array.prototype.map
+                .call(new Uint8Array(digest), function (byte) {
+                  return byte.toString(16).padStart(2, '0');
+                })
+                .join('');
+              log('sha256 ' + hex.slice(0, 16) + '…');
+              send({ type: 'runtime:log', level: 'info', message: 'digest ok for ' + path });
+              send({ type: 'runtime:exit', reason: 'self-test complete' });
+            })
+            .catch(function (cause) {
+              log('digest failed: ' + String(cause));
+              send({ type: 'runtime:exit', reason: 'self-test completed without digest' });
+            });
+        }
+
+        send({ type: 'runtime:ready', protocol: 1 });
+        log('announced ready');
+      })();
+    </script>
+  </body>
+</html>
