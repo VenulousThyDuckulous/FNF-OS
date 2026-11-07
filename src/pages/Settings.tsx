@@ -2,13 +2,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { LabSection } from '../components/LabSection';
 import { Icon, Section } from '../components/ui';
 import { ENGINE_LIST } from '../lib/engines/registry';
-import { supportMatrix } from '../lib/engines/support';
+import { FEATURE_LABEL, supportMatrix } from '../lib/engines/support';
 import { STATUS_LABEL } from '../lib/engines/types';
 import { engineName } from '../lib/format';
 import { formatBytes } from '../lib/import/safety';
+import { COMPAT_RUNTIME, COMPAT_RUNTIME_FEATURES, COMPAT_RUNTIME_LIMITATIONS } from '../lib/player/profile';
 import { RUNTIME_CANDIDATES, type CandidateStatus } from '../lib/runtime/catalogue';
 import { installedRuntimes, RUNTIME_CATALOG } from '../lib/runtime/manager';
 import { readStorage, requestPersistence, storageWarning, type StorageSnapshot } from '../lib/storage';
+import { Link } from '../router';
 import { ACCENT_PRESETS, useSettings, type ThemeMode } from '../state/settings';
 import { useToast } from '../state/toast';
 import { useLibrary } from '../state/library';
@@ -262,6 +264,36 @@ export function SettingsPage(): JSX.Element {
         description="Projects that exist today and what each still needs. Nothing listed here is installed, launchable or counted as support."
       >
         <div className="stack" style={{ gap: 10 }}>
+          <div className="card">
+            <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+              <strong>{COMPAT_RUNTIME.name}</strong>
+              <span className="badge badge-warn">{COMPAT_RUNTIME.statusLabel}</span>
+            </div>
+            <p className="muted" style={{ marginBottom: 8 }}>
+              Built into the app. Reads a Psych-format chart and the mod's own instrumental in the browser — no
+              engine build is downloaded or executed. It is not a Psych Engine port, and it is not yet verified
+              against community mods.
+            </p>
+            <p className="faint" style={{ marginBottom: 8 }}>
+              v{COMPAT_RUNTIME.version} · {COMPAT_RUNTIME.formats.join(' · ')}
+            </p>
+            <div className="row" style={{ flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+              {Object.entries(COMPAT_RUNTIME_FEATURES).map(([id, support]) => (
+                <span key={id} className="badge" data-support={support}>
+                  {FEATURE_LABEL[id as keyof typeof FEATURE_LABEL] ?? id} · {support}
+                </span>
+              ))}
+            </div>
+            <ul className="list">
+              {COMPAT_RUNTIME_LIMITATIONS.slice(0, 4).map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+            <Link to="/lab/player" className="btn btn-sm" style={{ alignSelf: 'flex-start', marginTop: 10 }}>
+              Play the built-in test song
+            </Link>
+          </div>
+
           {RUNTIME_CANDIDATES.map((candidate) => (
             <div className="card" key={candidate.id}>
               <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
