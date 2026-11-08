@@ -31,21 +31,21 @@ That is the work FNF OS v1.0 deliberately leaves un-started rather than faking.
 
 ## Psych Engine
 
-- Upstream: <https://github.com/ShadowMario/FNF-PsychEngine> - Apache-2.0.
+- Upstream: <https://github.com/ShadowMario/FNF-PsychEngine> — Apache-2.0.
 - Import/detection: **works** (`pack.json`, `data/<song>/<song>.json`, `scripts/*.lua`).
 - Playback: **unavailable**.
 - Obstacles: Lua/HScript hosts gated behind desktop flags upstream; hxvlc video;
   filesystem-backed mod folders; shader pipeline uses OpenFL shaders that need a
   WebGL translation layer.
 - Reference worth reading: the community mobile port
-  <https://github.com/BrenninhoTools/FNF-PsychEngine-Mobile> - useful for input and
+  <https://github.com/BrenninhoTools/FNF-PsychEngine-Mobile> — useful for input and
   asset handling, but a native mobile port does not imply browser compatibility.
 - First milestone: boot to a song with replacement assets and no scripts, then add
   the Lua host, then modcharts and shaders.
 
 ## Friday Night Funkin' V-Slice
 
-- Upstream: <https://github.com/FunkinCrew/Funkin> - code Apache-2.0; assets are
+- Upstream: <https://github.com/FunkinCrew/Funkin> — code Apache-2.0; assets are
   licensed separately; the name/logo are trademarks.
 - Import/detection: **works** (`_polymod_meta.json`, `mod.json` with `api_version`).
 - Playback: **unavailable**. An official HTML5 build exists but has no browser-side
@@ -56,7 +56,7 @@ That is the work FNF OS v1.0 deliberately leaves un-started rather than faking.
 
 ## Kade Engine
 
-- Upstream: <https://github.com/kadedev/Kade-Engine> - Apache-2.0.
+- Upstream: <https://github.com/kadedev/Kade-Engine> — Apache-2.0.
 - Import/detection: **works** (`assetsMods/`, `ModCore/`, bare chart folders).
 - Playback: **unavailable**.
 - Obstacles: ModCore mod loading is desktop-only; the project is historical and
@@ -65,7 +65,7 @@ That is the work FNF OS v1.0 deliberately leaves un-started rather than faking.
 
 ## Codename Engine
 
-- Upstream: <https://github.com/CodenameCrew/CodenameEngine> - Apache-2.0 **plus
+- Upstream: <https://github.com/CodenameCrew/CodenameEngine> — Apache-2.0 **plus
   additional README restrictions**.
 - Import/detection: **works** (Codename keys in `mod.json`, Haxe scripts).
 - Playback: **blocked by licensing before engineering**. The README states, among
@@ -93,3 +93,31 @@ Rules:
 - A runtime package is only added to `RUNTIME_CATALOG` after it has a SHA-256, a
   licence review and a passing Compatibility Lab run.
 - `playback` in the registry changes only after real mods pass. Never before.
+
+## Audited status (checked 2026-11-08)
+
+The machine-readable version of this table is `src/lib/engines/runtimeStatus.ts`, and
+it is what the app's Engines page renders. `canClaimPlayable()` gates every
+"playable" word in the UI and is false for all four engines.
+
+| Engine | Status | Licence | Browser build | Engine code in page | Real mod tested |
+| --- | --- | --- | --- | --- | --- |
+| Psych Engine | Blocked by technical limits | Apache-2.0 (code) | Community HTML5 builds compile, mods and Lua unavailable | No | No |
+| V-Slice | Blocked by technical limits | Apache-2.0 code / separate assets | Official HTML5 build, base content only, no mod install | No | No |
+| Kade Engine | Blocked by technical limits | Apache-2.0 | `lime build html5` documented; only public port has no source | No | No |
+| Codename Engine | Blocked by licensing | Apache-2.0 + README restrictions | Web support unchecked upstream | No | No |
+
+Evidence per row (issues, docs and discussions that were actually read) is stored
+in the audit entries rather than summarised here, so it can be re-checked.
+
+### What would change a row
+
+1. A build of that engine that loads a user's own mod in the browser, by any
+   legitimate route, with a licence that permits self-hosting.
+2. Packaging it as a checksummed runtime (`RUNTIME_CATALOG`), then launching it
+   through `RuntimeHost` with a mod's files served over the virtual filesystem.
+3. A real mod from outside this repository, played to the results screen on
+   desktop and on a phone, with the outcome recorded as a test run.
+
+Only then does `playback` change, and only through `publishBlockers` clearing for
+that catalogue entry.

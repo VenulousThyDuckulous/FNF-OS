@@ -18,6 +18,7 @@ const NAV: NavEntry[] = [
   { to: '/', label: 'Home', icon: 'home' },
   { to: '/library', label: 'Library', icon: 'library', match: ['/mod'] },
   { to: '/import', label: 'Import', icon: 'import' },
+  { to: '/engines', label: 'Engines', icon: 'info' },
   { to: '/studio', label: 'Mod Studio', icon: 'studio', needsProject: true },
   { to: '/settings', label: 'Settings', icon: 'settings' },
 ];

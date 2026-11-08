@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Shell } from './components/Shell';
 import { Icon } from './components/ui';
 import { isAndroid, isIOS, promptInstall, requiresInstall } from './lib/platform';
+import { EnginesPage } from './pages/Engines';
 import { HistoryPage } from './pages/History';
 import { HomePage } from './pages/Home';
 import { ImportPage } from './pages/ImportPage';
@@ -73,6 +74,7 @@ function Routes(): JSX.Element {
   else if (pathname === '/studio') page = <ModStudioPage />;
   else if (pathname === '/settings') page = <SettingsPage />;
   else if (pathname === '/history') page = <HistoryPage />;
+  else if (pathname === '/engines') page = <EnginesPage />;
   else if (pathname === '/lab/player') page = <PlayerLabPage />;
   else if (modMatch) page = <ModDetailPage modId={modMatch.id} />;
   else page = <NotFound />;
